@@ -1,28 +1,10 @@
 <?php
 
 use \Bitrix\Main\Loader;
+use \Bitrix\Sale;
 
-CModule::IncludeModule("iblock");
-
-class TestprodProducts extends CBitrixComponent
+class BasketProducts extends CBitrixComponent
 {
-    const IBLOCK_ID = 5;
-    const SIZE_PROP_ID = 10;
-
-    /**
-     * Проверка наличия модулей требуемых для работы компонента
-     * @return bool
-     * @throws Exception
-     */
-    private function _checkModules()
-    {
-        if (!Loader::includeModule('iblock')) {
-            throw new Main\LoaderException(Loc::getMessage('STANDARD_ELEMENTS_LIST_CLASS_IBLOCK_MODULE_NOT_INSTALLED'));
-        }
-
-        return true;
-    }
-
     /**
      * Подготовка параметров компонента
      * @param $params
@@ -38,119 +20,84 @@ class TestprodProducts extends CBitrixComponent
      */
     public function executeComponent()
     {
-        $this->_checkModules();
-        $this->IncludeComponentTemplate();
+
     }
 
     /**
-     * добавление элемента
+     * добавление товара
      * @param $request
      */
     public static function addProd($request)
     {
-        $el = new \CIBlockElement;
-
-        $size_id = self::getSizeId($request);
-
-        $prodVal = [
-            "COLOR" => $request['color'],
-            "SIZE" => ["VALUE" => $size_id]
-        ];
-        $productProperty = [
-            "IBLOCK_ID" => self::IBLOCK_ID,
-            "NAME" => $request['name'],
-            "PROPERTY_VALUES" => $prodVal
-        ];
-
-        if ($PRODUCT_ID = $el->Add($productProperty)) {
-            $db_props = $el->GetProperty(self::IBLOCK_ID, $PRODUCT_ID);
-            while ($ar_props = $db_props->Fetch()) {
-                $props[] = $ar_props;
-            }
-            echo 'Элемент ID=' . $PRODUCT_ID . ' добавлен.';
-        } else {
-            echo "Error: " . $el->LAST_ERROR;
+        $quantity = 1; // по умолчанию 1 товар
+        $basket = self::getBasket();
+        if ($item = $basket->getExistsItem('catalog', $request['id'])) {  // увеличение количества одного вида товара, если уже в корзине
+            $item->setField('QUANTITY', $item->getQuantity() + $quantity);
         }
-
+        else {
+            $item = $basket->createItem('catalog', $request['id']); //  добавляем товар в корзину
+            $item->setFields(array(
+                'QUANTITY' => $quantity,
+                'CURRENCY' => Bitrix\Currency\CurrencyManager::getBaseCurrency(),
+                'LID' => Bitrix\Main\Context::getCurrent()->getSite(),
+                'PRODUCT_PROVIDER_CLASS' => 'CCatalogProductProvider',
+            ));
+        }
+        $basket->save();
     }
 
     /**
-     * удаление элемента
+     * удаление товара
      * @param $request
      */
     public static function deleteProd($request)
     {
-
-        $el = new \CIBlockElement;
-        if ($el->Delete($request['id'])) {
-            echo 'Элемент ID=' . $request['id'] . ' удален.';
-        } else {
-            echo "Error: " . $el->LAST_ERROR;
-        }
+        $basket = self::getBasket();
+        if($item = $basket->getExistsItem('catalog', $request['id'])) {
+            $item->delete();
+    }
+        $basket->save();
     }
 
     /**
-     * изменение элемента
+     * изменение товара
      * @param $request
      */
     public static function updateProd($request)
     {
-        $el = new \CIBlockElement;
-        $prodProps = [
-            "COLOR" => $request['color'],
-            "SIZE" => self::getSizeID($request)
-        ];
-        $arFields = [
-            "NAME" => $request['name'],
-            "PROPERTY_VALUES" => $prodProps
-
-        ];
-
-        if ($el->Update($request['id'], $arFields)) {
-            echo 'Элемент ID=' . $request['id'] . ' обновлен.';
-        } else {
-            echo "Error: " . $el->LAST_ERROR;
+        $quantity = 1;
+        $basket = self::getBasket();
+        if($item = $basket->getExistsItem('catalog', $request['id'])) {     //пример уменьшения количества одного вида товара
+            if($item->getQuantity() > 1) {
+                $item->setField('QUANTITY', $item->getQuantity() - $quantity);
+            }
+            else{                   //удаляем товар из корзины
+                self::deleteProd($request);
+            }
         }
+        if($request['update_params']){ // допустим есть некий массив с изменением свойств товара вида ["PROPERTY1" => "VALUE1"]
+            if($item = $basket->getExistsItem('catalog', $request['id'])) {     //пример уменьшения количества одного вида товара
+                $item->setFields($request["update_params"]);
+            }
+    }
+        $basket->save();
     }
 
     /**
-     * инфо об элементе
-     * @param $request
+     * получаем корзину
      */
-    public static function getInfoProd($request)
-    {
-        $el = new \CIBlockElement;
-        $res = $el->GetByID($request['id']);
-        if ($ar_res = $res->GetNextElement()) {
-            $props = $ar_res->GetProperties();
-            $fields = $ar_res->GetFields();
-        }
-
-        $html = "id: {$fields['ID']}<br>";
-        $html .= "name: {$fields['NAME']}<br>";
-        $html .= "color: {$props['COLOR']['VALUE']}<br>";
-        $html .= "size: {$props['SIZE']['VALUE_ENUM']}<br>";
-        echo $html;
+    public  static function getBasket(){
+        $basket = Sale\Basket::loadItemsForFUser(Sale\Fuser::getId(), Bitrix\Main\Context::getCurrent()->getSite());
+        return $basket;
     }
 
     /**
-     * добавление или возврат id размера
+     * получаем некие свойства элементов в корзине
      * @param $request
-     * @return bool|false|int|string
      */
-    public static function getSizeID($request)
-    {
-        $size_enums = CIBlockPropertyEnum::GetList(Array("DEF" => "DESC", "SORT" => "ASC"), Array("IBLOCK_ID" => self::IBLOCK_ID, "CODE" => "SIZE"));
-        while ($size_fields = $size_enums->GetNext()) {
-            $size_id_vals[$size_fields["ID"]] = $size_fields["VALUE"];
-        }
-        if (!in_array($request['size'], array_values($size_id_vals))) {
-            $size = new CIBlockPropertyEnum;
-            $size_id = $size->Add(["PROPERTY_ID" => self::SIZE_PROP_ID, "VALUE" => $request['size']]);
-        } else {
-            $size_id = array_search($request['size'], $size_id_vals);
-        }
-        return $size_id;
+    public static function readProd($request){
+        $basket = Sale\Basket::loadItemsForFUser(Sale\Fuser::getId(), Bitrix\Main\Context::getCurrent()->getSite());
+        $item = $basket->getExistsItem('catalog', $request['id']);
+        return $item->getPropertyCollection();
     }
-
 }

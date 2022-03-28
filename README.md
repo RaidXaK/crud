@@ -1,2 +1,3 @@
-# crud
-bascet crud
+1 задача в task1.php
+
+2 задача local/components/prod...

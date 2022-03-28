@@ -2,23 +2,20 @@
 use Bitrix\Main\Application;
 require_once($_SERVER['DOCUMENT_ROOT'] . "/bitrix/modules/main/include/prolog_before.php");
 
-CBitrixComponent::includeComponentClass("testprod:products");
+CBitrixComponent::includeComponentClass("prod:BasketProducts");
 $request = Application::getInstance()->getContext()->getRequest();
 
-switch ($request['query'])
-{
+switch ($request['query']) {
     case 'add':
-        TestprodProducts::addProd($request);
+        BasketProducts::addProd($request);
         break;
     case 'delete':
-        TestprodProducts::deleteProd($request);
+        BasketProducts::deleteProd($request);
         break;
     case 'update':
-        TestprodProducts::updateProd($request);
+        BasketProducts::updateProd($request);
         break;
     case 'getinfo':
-        TestprodProducts::getInfoProd($request);
+        BasketProducts::readProd($request);
         break;
-
-
 }
