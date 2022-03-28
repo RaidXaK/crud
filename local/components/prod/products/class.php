@@ -6,16 +6,6 @@ use \Bitrix\Sale;
 class BasketProducts extends CBitrixComponent
 {
     /**
-     * Подготовка параметров компонента
-     * @param $params
-     * @return mixed
-     */
-    public function onPrepareComponentParams($params)
-    {
-        return $_REQUEST;
-    }
-
-    /**
      * Точка входа в компонент
      */
     public function executeComponent()
@@ -94,6 +84,7 @@ class BasketProducts extends CBitrixComponent
     /**
      * получаем некие свойства элементов в корзине
      * @param $request
+     * @return mixed
      */
     public static function readProd($request){
         $basket = Sale\Basket::loadItemsForFUser(Sale\Fuser::getId(), Bitrix\Main\Context::getCurrent()->getSite());
